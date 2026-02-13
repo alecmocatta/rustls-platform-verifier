@@ -13,24 +13,6 @@ use rustls::{client::WantsClientCert, ClientConfig, ConfigBuilder, WantsVerifier
 mod verification;
 pub use verification::Verifier;
 
-// Build the Android module when generating docs so that
-// the Android-specific functions are included regardless of
-// the host.
-#[cfg(any(all(doc, docsrs), target_os = "android"))]
-#[cfg_attr(docsrs, doc(cfg(target_os = "android")))]
-pub mod android;
-
-/// Fixures and data to support testing the server
-/// certificate verifier.
-#[cfg(any(test, feature = "ffi-testing"))]
-mod tests;
-
-// Re-export any exported functions that are required for
-// tests to run in a platform-native environment.
-#[cfg(feature = "ffi-testing")]
-#[cfg_attr(feature = "ffi-testing", allow(unused_imports))]
-pub use tests::ffi::*;
-
 /// Exposed for debugging certificate issues with standalone tools.
 ///
 /// This is not intended for production use, you should use [`BuilderVerifierExt`] or

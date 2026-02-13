@@ -5,8 +5,7 @@ use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, Server
 use rustls::client::WebPkiServerVerifier;
 use rustls::pki_types;
 use rustls::{
-    crypto::CryptoProvider, CertificateError, DigitallySignedStruct, Error as TlsError, OtherError,
-    SignatureScheme,
+    crypto::CryptoProvider, DigitallySignedStruct, Error as TlsError, OtherError, SignatureScheme,
 };
 
 use super::log_server_cert;
@@ -23,7 +22,6 @@ pub struct Verifier {
 impl Verifier {
     /// Creates a new verifier whose certificate validation is provided by
     /// WebPKI, using root certificates provided by the platform.
-    #[cfg_attr(docsrs, doc(cfg(all())))]
     pub fn new(crypto_provider: Arc<CryptoProvider>) -> Result<Self, TlsError> {
         Self::new_inner([], None, crypto_provider)
     }
@@ -31,7 +29,6 @@ impl Verifier {
     /// Creates a new verifier whose certificate validation is provided by
     /// WebPKI, using root certificates provided by the platform and augmented by
     /// the provided extra root certificates.
-    #[cfg_attr(docsrs, doc(cfg(not(target_os = "android"))))]
     pub fn new_with_extra_roots(
         extra_roots: impl IntoIterator<Item = pki_types::CertificateDer<'static>>,
         crypto_provider: Arc<CryptoProvider>,
@@ -82,40 +79,9 @@ impl Verifier {
             root_store.add(cert)?;
         }
 
-        #[cfg(all(
-            unix,
-            not(target_os = "android"),
-            not(target_vendor = "apple"),
-            not(target_arch = "wasm32"),
-        ))]
-        {
-            let result = rustls_native_certs::load_native_certs();
-            let (added, ignored) = root_store.add_parsable_certificates(result.certs);
-            if ignored > 0 {
-                log::warn!("{ignored} platform CA root certificates were ignored due to errors");
-            }
-
-            for error in result.errors {
-                log::warn!("Error loading CA root certificate: {error}");
-            }
-
-            // Don't return an error if this fails when other roots have already been loaded via
-            // `new_with_extra_roots`. It leads to extra failure cases where connections would otherwise still work.
-            if root_store.is_empty() {
-                return Err(rustls::Error::General(
-                    "No CA certificates were loaded from the system".to_owned(),
-                ));
-            } else {
-                log::debug!("Loaded {added} CA root certificates from the system");
-            }
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            root_store.add_parsable_certificates(
-                webpki_root_certs::TLS_SERVER_ROOT_CERTS.iter().cloned(),
-            );
-        };
+        root_store.add_parsable_certificates(
+            webpki_root_certs::TLS_SERVER_ROOT_CERTS.iter().cloned(),
+        );
 
         Ok(Self {
             inner: WebPkiServerVerifier::builder_with_provider(
@@ -175,13 +141,5 @@ impl ServerCertVerifier for Verifier {
 }
 
 fn map_webpki_errors(err: TlsError) -> TlsError {
-    match &err {
-        TlsError::InvalidCertificate(CertificateError::InvalidPurpose)
-        | TlsError::InvalidCertificate(CertificateError::InvalidPurposeContext { .. }) => {
-            TlsError::InvalidCertificate(CertificateError::Other(OtherError(Arc::new(
-                super::EkuError,
-            ))))
-        }
-        _ => err,
-    }
+    err
 }
